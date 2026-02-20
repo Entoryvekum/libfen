@@ -1,0 +1,10 @@
+.xmake/
+.cache/
+.vscode/
+testdata-triple/output/
+testdata-tiger/output/
+build/
+scripts/
+compile_commands.json
+
+*.typ
