@@ -21,27 +21,34 @@ int main() {
     encoding.buildHash();
 
     SAOptimizer<3> optimizer(encoding, 26, preAllocRadical, true);
-    optimizer.solve(20.0,  95, [](double T, int step, int best) {
-        static int cnt = 0;
-        if (T > 1)
-            return T * 0.99999925;
-        else if (T > 0.5) {
-            return T * 0.9999999;
-        }
-        else if (T > 0.2) {
-            return T * 0.9999999;
-        }
-        else {
-            if (cnt < 10) {
-                T += 0.25;
-                cnt++;
+    SAOptimizer<3>::SAParameters param{
+        20.0, 
+        95, 
+    };
+    struct nextTempType{
+        double operator()(double T,int numItr,double bestEnergy){
+            static int cnt = 0;
+            if (T > 1)
+                return T * 0.99999925;
+            else if (T > 0.5) {
+                return T * 0.9999999;
+            }
+            else if (T > 0.2) {
+                return T * 0.9999999;
             }
             else {
-                cnt = 0;
-                T += 0.5;
+                if (cnt < 10) {
+                    T += 0.25;
+                    cnt++;
+                }
+                else {
+                    cnt = 0;
+                    T += 0.5;
+                }
+                return T * 0.9999999;
             }
-            return T * 0.9999999;
         }
-    },0);
+    } nextTemp;
+    optimizer.solve<nextTempType>(param,nextTemp);
     return 0;
 }

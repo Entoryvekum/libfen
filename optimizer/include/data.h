@@ -1,5 +1,5 @@
 #pragma once
-#include "hash_table7.hpp"
+#include "hash_table6.hpp"
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -178,5 +178,5 @@ public:
     const int numRadical;
     mappingData<max_length> &mapping;
     std::vector<std::array<uint16_t, max_length>> keyEncoding;
-    emhash7::HashMap<uint64_t, uint16_t> hash;
+    emhash6::HashMap<uint64_t, uint16_t> hash;
 };

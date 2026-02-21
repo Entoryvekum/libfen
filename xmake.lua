@@ -4,49 +4,42 @@ set_config("arch", "x64")
 
 add_requires("emhash","thread-pool")
 
-target("LNS")
+function setup_target(target_name)
     set_kind("binary")
-    set_toolchains("msvc")
     set_languages("cxx20")
-    add_cxflags("/utf-8")
-    add_files("optimizer/lns/lns.cpp")
     set_rundir("$(projectdir)/")
-    add_packages("emhash")
+    
+    -- 平台特定的编译标志
+    if is_plat("windows") then
+        set_toolchains("msvc")
+        add_cxflags("/utf-8")
+    elseif is_plat("macosx", "linux") then
+        set_toolchains("clang", "gcc")
+        add_cxflags("-fPIC")
+    end
+    
+    -- 调试模式下启用地址检查
+    if is_mode("debug") then
+        
+    end
+end
 
 target("test_SA")
-    set_kind("binary")
-    set_toolchains("msvc")
-    set_languages("cxx20")
-    add_cxflags("/utf-8")
+    setup_target("test_SA")
     add_files("optimizer/test_sa.cpp")
-    set_rundir("$(projectdir)/")
     add_packages("emhash")
 
 target("test_BNB")
-    set_kind("binary")
-    set_toolchains("msvc")
-    set_languages("cxx20")
-    add_cxflags("/utf-8")
+    setup_target("test_BNB")
     add_files("optimizer/test_bnb.cpp")
-    set_rundir("$(projectdir)/")
     add_packages("emhash")
 
 target("test_TABU")
-    set_kind("binary")
-    set_toolchains("msvc")
-    set_languages("cxx20")
-    add_cxflags("/utf-8")
+    setup_target("test_TABU")
     add_files("optimizer/test_tabu.cpp")
-    set_rundir("$(projectdir)/")
     add_packages("emhash")
 
 target("test_MEM")
-    set_kind("binary")
-    set_toolchains("msvc")
-    set_languages("cxx20")
-    add_cxflags("/utf-8")
-    -- add_cxflags("/fsanitize=address", {tools = "msvc"})
-    -- add_ldflags("/fsanitize=address", {tools = "msvc"})
+    setup_target("test_MEM")
     add_files("optimizer/test_mem.cpp")
-    set_rundir("$(projectdir)/")
     add_packages("emhash","thread-pool")

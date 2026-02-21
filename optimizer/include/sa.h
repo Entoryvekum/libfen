@@ -7,14 +7,23 @@
 template <int max_length> class SAOptimizer
 {
 public:
+    struct SAParameters {
+        double T_start;
+        int bestBound;
+        int pos=-1;
+    };
     SAOptimizer(encodingData<max_length> &ed, int numKeys, int preAllocRadical, bool print)
         : encoding(ed), numKeys(numKeys), preAllocRadical(preAllocRadical), gen(std::random_device{}()), print(print) {
     }
 
-    void solve(double T_start, int bestBound, std::function<double(double currentT, int step, int best)> nextTemp,int pos) {
-        if (print)
-            std::cout<< std::format("\nSA | Optimization Start. Duplicates: {}, Pos: {}",encoding.dupCnt,pos)<<std::flush;
-        double T = T_start;
+    template<typename nextTempType> void solve(SAParameters param,nextTempType nextTemp) {
+        if (print) {
+            if(param.pos!=-1)
+                std::cout<< std::format("\nSA | Optimization Start. Duplicates: {}, Pos: {}",encoding.dupCnt,param.pos)<<std::flush;
+            else
+                std::cout<< std::format("\nSA | Optimization Start. Duplicates: {}",encoding.dupCnt)<<std::flush;
+        }
+        double T = param.T_start;
         bestMapping = encoding.mapping.radicalToKey;
         int currentEnergy = encoding.dupCnt;
         int bestEnergy = currentEnergy;
@@ -31,7 +40,6 @@ public:
         auto pointwiseModification = [&]() {
             // 1. 随机选择一个字根和新按键
             int radIdx = radicalGenNoPreAlloc(gen);
-            assert(radIdx<=300);
             uint16_t oldKey = encoding.mapping.radicalToKey[radIdx], newKey = keyGen(gen);
             while (oldKey == newKey)
                 newKey = keyGen(gen);
@@ -111,10 +119,10 @@ public:
                 pointwiseModification();
             else
                 exchangeModification();
-            if (encoding.dupCnt <= bestBound)
+            if (encoding.dupCnt <= param.bestBound)
                 break;
             T = nextTemp(T, numItr, bestEnergy);
-            if (encoding.dupCnt <= bestBound)
+            if (encoding.dupCnt <= param.bestBound)
                 break;
             if (print && numItr % 1000 == 0) {
                 auto now = std::chrono::steady_clock::now();
@@ -124,8 +132,12 @@ public:
                           << std::flush;
             }
         }
-        if (print)
-            std::cout<< std::format("\nSA | Optimization Complete. Min Duplicates: {}, Pos: {}",bestEnergy,pos)<<std::flush;
+        if (print) {
+            if(param.pos!=-1)
+                std::cout<< std::format("\nSA | Optimization Complete. Min Duplicates: {}, Pos: {}",bestEnergy,param.pos)<<std::flush;
+            else
+                std::cout<< std::format("\nSA | Optimization Complete. Min Duplicates: {},",bestEnergy)<<std::flush;
+        }
         encoding.mapping.radicalToKey = bestMapping;
         encoding.createEncodingFromMapping();
         encoding.buildHash();

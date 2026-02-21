@@ -3,6 +3,7 @@
 #include "data.h"
 #include "sa.h"
 #include <algorithm>
+#include <functional>
 #include <iostream>
 #include <random>
 #include <vector>
@@ -10,6 +11,14 @@
 template <int max_length> class MemeticOptimizer
 {
 public:
+    template<typename SANextTempType>struct memeParameter{
+        int generations;
+        int eliteCount;
+        double mutationRate;
+        std::function<double(int)> crossoverRatio;
+        std::function<double(int)> SAStartTemp;
+        SANextTempType SANextTemp;
+    };
     struct Individual
     {
         std::vector<uint16_t> mapping; // radicalToKey
@@ -35,13 +44,13 @@ public:
     }
 
     // 初始化种群
-    void initialize(double mutationRate = -1) {
+    void initialize(double initMutationRate = -1) {
         std::uniform_int_distribution<int> keyDist(1, numKeys);
         for (auto &ind : population) {
             ind.mapping = encoding.mapping.radicalToKey; // 复制初始状态
             std::uniform_real_distribution<double> probGen(0.0, 1.0);
             for (int i = preAllocRadical + 1; i <= encoding.numRadical; ++i) {
-                if (probGen(gen) < mutationRate)
+                if (probGen(gen) < initMutationRate)
                     ind.mapping[i] = keyDist(gen);
             }
             evaluate(ind, *plans[0]);
@@ -53,22 +62,21 @@ public:
     }
 
     // 主运行循环
-    void run(int generations, int eliteCount, double mutationRate, std::function<double(int)> sa_T_start,
-             std::function<double(double, int, int,int)> sa_nextTemp,std::function<double(int)> crossoverRatio) {
+    template<typename SANextTempType> void run(memeParameter<SANextTempType> param) {
         auto startTime = std::chrono::steady_clock::now();
         BS::thread_pool pool;
         std::uniform_real_distribution<double> probGen(0.0, 1.0);
-        for (int genIdx = 0; genIdx < generations; ++genIdx) {
+        for (int genIdx = 0; genIdx < param.generations; ++genIdx) {
             std::vector<Individual> newPop;
             newPop.resize(popSize);
 
             // 1. 精英保留
-            for (int i = 0; i < eliteCount; ++i) {
+            for (int i = 0; i < param.eliteCount; ++i) {
                 newPop[i] = population[i];
             }
 
-            for (int pos = eliteCount; pos < popSize; pos++) {
-                pool.detach_task([this,&newPop, crossoverRatio,genIdx,mutationRate,&probGen, sa_T_start, sa_nextTemp, pos, eliteCount]() {
+            for (int pos = param.eliteCount; pos < popSize; pos++) {
+                pool.detach_task([this,&newPop,param,genIdx,&probGen,pos]() mutable {
                     auto &plan = *plans[pos];
                     // 2. 交叉与变异
                     int q1=tournamentSelect(3),q2=tournamentSelect(3);
@@ -78,17 +86,21 @@ public:
                     const auto &p2 = population[q2];
 
                     Individual &child = newPop[pos];
-                    child.mapping = crossoverGPX(p1.mapping, p2.mapping,crossoverRatio(genIdx));
-                    if (genIdx >= 3 && probGen(gen) < mutationRate)
+                    child.mapping = crossoverGPX(p1.mapping, p2.mapping,param.crossoverRatio(genIdx));
+                    if (genIdx >= 3 && probGen(gen) < param.mutationRate)
                         mutate(child.mapping);
 
                     // 3. 局部搜索 (SA) - 拉马克进化
                     evaluate(child, plan);
                     int cnt = plan.encoding.dupCnt;
-                    auto sa_nextTemp_withGenIdx=[sa_nextTemp,genIdx](double T, int step, int best){
-                        return sa_nextTemp(T,step,best,genIdx);
+
+                    typename SAOptimizer<max_length>::SAParameters SAParam{
+                        param.SAStartTemp(genIdx),
+                        0,
+                        pos - param.eliteCount + 1
                     };
-                    plan.sa.solve(sa_T_start(cnt), 0, sa_nextTemp_withGenIdx, pos - eliteCount + 1);
+                    param.SANextTemp.setGenIdx(genIdx);
+                    plan.sa.template solve<SANextTempType>(SAParam,param.SANextTemp);
                     child.mapping = plan.mapping.radicalToKey;
                     child.fitness = plan.encoding.dupCnt;
                     std::cout << std::format("Pos: {} | DupCnt: {} -> {}  ...\n", pos, cnt, child.fitness);
