@@ -43,3 +43,8 @@ target("test_MEM")
     setup_target("test_MEM")
     add_files("optimizer/test_mem.cpp")
     add_packages("emhash","thread-pool")
+
+target("test_SA_MT")
+    setup_target("test_SA_MT")
+    add_files("optimizer/test_sa_mt.cpp")
+    add_packages("emhash","thread-pool")

@@ -16,7 +16,7 @@ public:
         : encoding(ed), numKeys(numKeys), preAllocRadical(preAllocRadical), gen(std::random_device{}()), print(print) {
     }
 
-    template<typename nextTempType> void solve(SAParameters param,nextTempType nextTemp) {
+    template<typename nextTempType> int solve(SAParameters param,nextTempType nextTemp) {
         if (print) {
             if(param.pos!=-1)
                 std::cout<< std::format("\nSA | Optimization Start. Duplicates: {}, Pos: {}",encoding.dupCnt,param.pos)<<std::flush;
@@ -138,6 +138,9 @@ public:
             else
                 std::cout<< std::format("\nSA | Optimization Complete. Min Duplicates: {},",bestEnergy)<<std::flush;
         }
+        return bestEnergy;
+    }
+    void applyBest() {
         encoding.mapping.radicalToKey = bestMapping;
         encoding.createEncodingFromMapping();
         encoding.buildHash();

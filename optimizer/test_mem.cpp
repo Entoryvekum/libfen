@@ -10,7 +10,7 @@ int main() {
     mp.readMapping("testdata-triple/26-02-17-06-26-01.4573490-mapping.txt");
 
     for (auto &v : mp.radicalWeight) {
-        v = std::log(v * 0.1 + 1) * 0.5 + 1;
+        v = std::log(v * 0.1 + 1) * 0.2 + 1;
         // v=1;
     }
 
@@ -39,66 +39,97 @@ int main() {
     MemeticOptimizer<3> optimizer(encoding, numKeys, preAllocRadical, popSize);
 
     // 初始化种群
-    double mutationRate = 0.4;
     optimizer.initialize();
 
     // 3. 配置模因算法参数
     struct nextTempType
     {
         double operator()(double T, int numItr, double bestEnergy) {
-            static int cnt = 0;
             if (T > 1)
-                return T * 0.99999925;
-            else if (T > 0.2)
                 return T * 0.9999999;
-            else {
-                if (bestEnergy < 95 && cnt < 2) {
-                    ++cnt;
-                    return T + 0.15;
+            else if (T > 0.2) {
+                if(genIdx<=3) {
+                    if(genIdx==1&&T<0.5||genIdx==2&&T<0.4||genIdx==3&&T<0.3){
+                        resetCnt();
+                        return -1;
+                    }
+                    return T * 0.99999995;
                 }
-                else if (cnt == 2 && T > 0.175) {
+                else
                     return T * 0.9999999;
+            }
+            else {
+                if (bestEnergy > 100) {
+                    // 若最优解仍大于100，则重新升温
+                    if (cntReheatForReject < 1) {
+                        ++cntReheatForReject;
+                        return T + 1;
+                    }
+                    else {
+                        resetCnt();
+                        return -1;
+                    }
+                }
+                else if (bestEnergy < 95) {
+                    // 若最优解小于95，则重新升温
+                    if (cntReheatForRefine < 1) {
+                        ++cntReheatForRefine;
+                        return T + 0.5;
+                    }
+                    else if (cntReheatForRefine < 2 && genIdx > 3) {
+                        ++cntReheatForRefine;
+                        return T + 0.3;
+                    }
+                    else {
+                        resetCnt();
+                        return -1;
+                    }
                 }
                 else {
-                    cnt = 0;
+                    resetCnt();
                     return -1;
                 }
             }
         }
-        void setGenIdx(int genIdx) {}
+        void setGenIdx(int x) { genIdx = x; }
+        void resetCnt() {
+            cntReheatForReject = 0;
+            cntReheatForRefine = 0;
+        }
+        int cntReheatForReject = 0;
+        int cntReheatForRefine = 0;
+        int genIdx;
     } SANextTemp;
-    MemeticOptimizer<3>::memeParameter<nextTempType> param{
-        10000,
-        4,
-        0.4,
-        [&gen](int genIdx) -> double {
-            if (genIdx <= 2)
-                return 0.5;
-            else if (genIdx <= 3) {
-                std::uniform_real_distribution<double> probGen(0.6, 0.8);
-                return probGen(gen);
-            }
-            else {
-                std::uniform_real_distribution<double> probGen(0.75, 0.85);
-                return probGen(gen);
-            }
-        },
-        [](int dup) -> double {
-            if (dup > 500)
-                return 5;
-            else if (dup > 300)
-                return 4;
-            else if (dup > 200)
-                return 3;
-            else if (dup > 150)
-                return 1.5;
-            else if (dup > 110)
-                return 1;
-            else
-                return 0.85;
-        },
-        SANextTemp
-    };
+    MemeticOptimizer<3>::memeParameter<nextTempType> param{10000,
+                                                           4,
+                                                           0.4,
+                                                           [&gen](int genIdx) -> double {
+                                                               if (genIdx <= 2)
+                                                                   return 0.5;
+                                                               else if (genIdx <= 3) {
+                                                                   std::uniform_real_distribution<double> probGen(0.6, 0.8);
+                                                                   return probGen(gen);
+                                                               }
+                                                               else {
+                                                                   std::uniform_real_distribution<double> probGen(0.75, 0.85);
+                                                                   return probGen(gen);
+                                                               }
+                                                           },
+                                                           [](int dup) -> double {
+                                                               if (dup > 500)
+                                                                   return 5;
+                                                               else if (dup > 300)
+                                                                   return 4;
+                                                               else if (dup > 200)
+                                                                   return 3;
+                                                               else if (dup > 150)
+                                                                   return 1.5;
+                                                               else if (dup > 110)
+                                                                   return 1;
+                                                               else
+                                                                   return 0.85;
+                                                           },
+                                                           SANextTemp};
 
     // 4. 运行优化
     std::cout << "Starting Memetic Optimization..." << std::endl;

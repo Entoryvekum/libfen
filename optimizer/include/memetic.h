@@ -100,10 +100,20 @@ public:
                         pos - param.eliteCount + 1
                     };
                     param.SANextTemp.setGenIdx(genIdx);
-                    plan.sa.template solve<SANextTempType>(SAParam,param.SANextTemp);
+                    int bestInSA=plan.sa.template solve<SANextTempType>(SAParam,param.SANextTemp);
+                    bool isCurrentBest=false;
+                    if(bestInSA<bestEnergy) {
+                        std::lock_guard<std::mutex> lock(bestEnergyMtx);
+                        if (bestInSA < bestEnergy) {
+                            if(bestInSA!=plan.encoding.dupCnt)
+                                plan.sa.applyBest();
+                            bestEnergy=plan.encoding.dupCnt;
+                            isCurrentBest=true;
+                        }
+                    }
                     child.mapping = plan.mapping.radicalToKey;
                     child.fitness = plan.encoding.dupCnt;
-                    std::cout << std::format("Pos: {} | DupCnt: {} -> {}  ...\n", pos, cnt, child.fitness);
+                    std::cout << std::format("Pos: {} | DupCnt: {} -> {} ({}) | Is best: {} \n", pos, cnt, child.fitness,bestInSA,isCurrentBest);
                 });
             }
             pool.wait();
@@ -112,14 +122,15 @@ public:
                       [](const Individual &a, const Individual &b) { return a.fitness < b.fitness; });
             if (population[0].fitness < bestInd.fitness) {
                 bestInd = population[0];
+                bestEnergy=population[0].fitness;
             }
             auto now = std::chrono::steady_clock::now();
             auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count();
             std::cout << std::format("[Gen {} | Best: {} | Avg: {:.1f} | Time: {}s]\n", genIdx + 1, bestInd.fitness,
                                      calculateAvgFitness(), elapsed);
         }
-
-        // 最后将最优解应用到 encoding
+    }
+    void applyBest() {
         encoding.mapping.radicalToKey = bestInd.mapping;
         encoding.createEncodingFromMapping();
         encoding.buildHash();
@@ -133,6 +144,8 @@ private:
     std::vector<Individual> population;
     std::vector<std::unique_ptr<optimizationPlan>> plans;
     Individual bestInd;
+    std::mutex bestEnergyMtx;
+    int bestEnergy;
     std::mt19937 gen;
 
     // 评估函数，重建哈希表
