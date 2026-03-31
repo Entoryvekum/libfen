@@ -1,5 +1,5 @@
 #pragma once
-#include "data.h"
+#include "data_numerical_hashonly.h"
 #include <vector>
 #include <random>
 #include <iostream>
@@ -7,18 +7,25 @@
 #include <chrono>
 #include <limits>
 
-template <int max_length> class TabuOptimizer
+template <int maxLength,int numKeys> class TabuOptimizer
 {
 public:
-    TabuOptimizer(encodingData<max_length> &ed, int numKeys, int preAllocRadical, bool print)
-        : encoding(ed), numKeys(numKeys), preAllocRadical(preAllocRadical), 
-          gen(0 /*std::random_device{}()*/), print(print) {
+    struct TabuParameters
+    {
+        int maxIterations;
+        int tabuTenure;
+        int neighborSize;
+        int bestBound=0;
+    };
+    TabuOptimizer(mapping<maxLength,numKeys> &ed, int preAllocRadical, bool print)
+        : encoding(ed),  preAllocRadical(preAllocRadical), 
+          gen( std::random_device{}()), print(print) {
         // tabuList[radicalIdx][keyIdx] 存储该移动解禁的迭代轮次
         tabuList.resize(encoding.numRadical + 1, std::vector<int>(numKeys + 1, 0));
     }
     
-    void solve(int maxIterations, int tabuTenure, int neighborSize, int bestBound) {
-        bestMapping = encoding.mapping.radicalToKey;
+    void solve(TabuParameters param) {
+        bestMapping = encoding.radicalToKey;
         int currentEnergy = encoding.dupCnt;
         int bestEnergy = currentEnergy;
 
@@ -28,8 +35,8 @@ public:
 
         auto startTime = std::chrono::steady_clock::now();
 
-        for (int iter = 1; iter <= maxIterations; ++iter) {
-            if (currentEnergy <= bestBound)
+        for (int iter = 1; iter <= param.maxIterations; ++iter) {
+            if (currentEnergy <= param.bestBound)
                 break;
 
             struct Move {
@@ -43,16 +50,16 @@ public:
             Move bestLocalMove = {-1, 0, 0, std::numeric_limits<int>::max()};
             bool foundMove = false;
 
-            for (int k = 0; k < neighborSize; ++k) {
+            for (int k = 0; k < param.neighborSize; ++k) {
                 // 1. 生成随机移动
                 int radIdx = radicalGen(gen);
-                uint16_t oldKey = encoding.mapping.radicalToKey[radIdx], newKey = keyGen(gen);
+                uint16_t oldKey = encoding.radicalToKey[radIdx], newKey = keyGen(gen);
                 while (oldKey == newKey) {
                     newKey = keyGen(gen);
                 }
 
                 // 2. 试探性修改并计算 Delta
-                encoding.modifyMapping(radIdx, newKey);
+                encoding.modifyRadical(radIdx, newKey);
                 int newTotal = encoding.dupCnt;
                 int delta = newTotal - currentEnergy;
                 
@@ -65,22 +72,22 @@ public:
                 }
 
                 // 4. 回溯（撤销修改），准备测试下一个邻居
-                encoding.modifyMapping(radIdx, oldKey);
+                encoding.modifyRadical(radIdx, oldKey);
             }
 
             if (foundMove) {
                 // 应用最佳修改
-                encoding.modifyMapping(bestLocalMove.radIdx, bestLocalMove.newKey);
+                encoding.modifyRadical(bestLocalMove.radIdx, bestLocalMove.newKey);
                 currentEnergy = encoding.dupCnt;
 
                 // 更新全局最优
                 if (currentEnergy < bestEnergy) {
                     bestEnergy = currentEnergy;
-                    bestMapping = encoding.mapping.radicalToKey;
+                    bestMapping = encoding.radicalToKey;
                 }
 
                 // 更新禁忌表
-                tabuList[bestLocalMove.radIdx][bestLocalMove.oldKey] = iter + tabuTenure;
+                tabuList[bestLocalMove.radIdx][bestLocalMove.oldKey] = iter + param.tabuTenure;
             }
             if (print && iter % 100 == 0) {
                 auto now = std::chrono::steady_clock::now();
@@ -91,14 +98,15 @@ public:
         }
         if (print)
             std::cout << "\nTS | Optimization Complete. Min Duplicates: " << bestEnergy << std::endl;
-        encoding.mapping.radicalToKey = bestMapping;
+    }
+    void applyBest() {
+        encoding.radicalToKey = bestMapping;
         encoding.createEncodingFromMapping();
         encoding.buildHash();
     }
 
 private:
-    encodingData<max_length> &encoding;
-    int numKeys;
+    mapping<maxLength,numKeys> &encoding;
     int preAllocRadical;
     std::vector<uint16_t> bestMapping;
     std::vector<std::vector<int>> tabuList; 
