@@ -1,6 +1,5 @@
 add_rules("mode.debug", "mode.release", "mode.releasedbg")
-set_config("mode", "releasedbg")
-set_config("arch", "x64")
+set_defaultmode("releasedbg")
 
 add_requires("emhash", "thread-pool")
 
@@ -15,7 +14,7 @@ function setup_target(target_name)
 		add_cxflags("/utf-8")
 	elseif is_plat("macosx", "linux") then
 		set_toolchains("clang", "gcc")
-		add_cxflags("-fPIC")
+		add_cxflags("-fPIC", "-march=native")
 	end
 	add_defines(
 		"__ORDER_LITTLE_ENDIAN__=1234",

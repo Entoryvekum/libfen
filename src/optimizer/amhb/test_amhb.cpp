@@ -1,7 +1,7 @@
 #include "BS_thread_pool.hpp"
 #include "data_numerical_hashonly.h"
-#include "platform.h"
 #include "pcg_random.hpp"
+#include "platform.h"
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -268,27 +268,30 @@ public:
                             cpu_pause();
                         // 赋值left=right以锁定剩下所有任务，并更改allowSteal为false
                         localRight = right.load(std::memory_order_seq_cst);
-                        stepSize = getStepSize(pos, localRight);
                         localLeft = localRight;
                         left.store(localLeft, std::memory_order_seq_cst);
                         localAllowSteal = false;
                         allowSteal.store(false, std::memory_order_relaxed);
                         stealLock.clear(std::memory_order_release);
+                        return pos != localLeft;
                     };
                     localRight = right.load(std::memory_order_seq_cst);
                     stepSize = getStepSize(pos, localRight);
-                    // 分支1：
+                    // 余量足够以当前步长自增，且不会达到锁定阀值
                     if (localRight - localLeft >= stepSize + stealThreshold) {
                         localLeft += stepSize;
                         left.store(localLeft, std::memory_order_seq_cst);
                         // 重新判断right-left>=k
                         if (right.load(std::memory_order_seq_cst) - localLeft < stealThreshold)
-                            lockFinalBatch();
+                            if (!lockFinalBatch())
+                                break;
                     }
-                    // 分支2：
-                    else if (localAllowSteal)
-                        lockFinalBatch();
-                    // 分支3:
+                    // 余量不够，锁定最后一批
+                    else if (localAllowSteal) {
+                        if (!lockFinalBatch())
+                            break;
+                    }
+                    // 所有任务都已经完成
                     else
                         break;
                 }
@@ -326,11 +329,11 @@ public:
             int vLeft = victim.left.load(std::memory_order_relaxed);
             int vRight = victim.right.load(std::memory_order_relaxed);
             // 不够一次偷窃
-            if (vRight - vLeft < 2 * stealThreshold) {
+            if (vRight - vLeft < 2 * stealThreshold || vRight - vLeft < 1) {
                 victim.stealLock.clear(std::memory_order_release);
                 return false;
             }
-            int middle = (vLeft + vRight + 1) / 2;
+            int middle = std::min((vLeft + vRight + 1) / 2, vRight - 1);
             // 修改right，偷取后半部分
             victim.right.store(middle, std::memory_order_seq_cst);
             // 回滚检查：重新判断 left <= middle - k
@@ -439,7 +442,7 @@ public:
         encoding.radicalToKey = bestMapping;
         encoding.createEncodingFromMapping();
         encoding.buildHash();
-        encoding.writeMapping("testdata-triple/output/AMHB/");
+        encoding.writeMapping("test_data/niwang_sanma/output/AMHB/");
         if (print)
             std::cout << "\n AMHB | Optimization Complete. Best: " << bestEnergy << std::endl;
         pool.wait();
@@ -579,14 +582,12 @@ int main() {
 
     int numWorker = 4;
     int totalNeighbors = 240;
-    int stealThreshold = 1;
+    int stealThreshold = 0;
 
     AMHBOptimizer<OpType, OpResult, 3, 26> optimizer(encoding, numWorker, true, totalNeighbors, stealThreshold);
 
     // 5. 注册算子
-    optimizer.LiteOperatorPool.addOperator(PointwiseModificationOperator<3, 26>(preAllocRadical), "Pointwise",
-                                           1.0 // 算子基础 cost
-    );
+    optimizer.LiteOperatorPool.addOperator(PointwiseModificationOperator<3, 26>(preAllocRadical), "Pointwise", 1.0);
     optimizer.LiteOperatorPool.addOperator(ExchangeModificationOperator<3, 26>(preAllocRadical), "Exchange", 2.0);
 
     // 6. 设置运行参数
