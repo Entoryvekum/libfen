@@ -13,16 +13,15 @@ function setup_target(target_name)
 	if is_plat("windows") then
 		set_toolchains("msvc")
 		add_cxflags("/utf-8")
-		add_defines(
-            "__ORDER_LITTLE_ENDIAN__=1234",
-            "__ORDER_BIG_ENDIAN__=4321",
-            "__BYTE_ORDER__=1234"
-        )
 	elseif is_plat("macosx", "linux") then
 		set_toolchains("clang", "gcc")
 		add_cxflags("-fPIC")
 	end
-
+	add_defines(
+		"__ORDER_LITTLE_ENDIAN__=1234",
+		"__ORDER_BIG_ENDIAN__=4321",
+		"__BYTE_ORDER__=1234"
+	)
 end
 
 target("test_SA")

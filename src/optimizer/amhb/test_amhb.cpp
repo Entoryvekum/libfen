@@ -1,18 +1,17 @@
 #include "BS_thread_pool.hpp"
 #include "data_numerical_hashonly.h"
+#include "platform.h"
 #include "pcg_random.hpp"
 #include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
 #include <format>
-#include <immintrin.h>
 #include <iostream>
 #include <limits>
 #include <memory>
 #include <random>
 #include <string>
-#include <sys/stat.h>
 #include <vector>
 
 template <typename OperatorType, typename OperatorResultType, int maxLength, int numKeys>
@@ -151,7 +150,7 @@ public:
                 while (!globalAllowRun.load(std::memory_order_acquire)) {
                     if (allTaskComplete.load(std::memory_order_acquire))
                         return;
-                    _mm_pause();
+                    cpu_pause();
                 }
                 // 开始运行
                 int currentLeft = left.load(std::memory_order_seq_cst);
@@ -161,7 +160,7 @@ public:
                 if (currentRight - currentLeft == 0) {
                     // 直接跳到等allowRun变false 的阶段
                     while (globalAllowRun.load(std::memory_order_acquire))
-                        _mm_pause();
+                        cpu_pause();
                     continue;
                 }
                 // 存在任务
@@ -266,7 +265,7 @@ public:
                     auto lockFinalBatch = [&]() {
                         // 加锁并等待加锁完成
                         while (stealLock.test_and_set(std::memory_order_acquire))
-                            _mm_pause();
+                            cpu_pause();
                         // 赋值left=right以锁定剩下所有任务，并更改allowSteal为false
                         localRight = right.load(std::memory_order_seq_cst);
                         stepSize = getStepSize(pos, localRight);
@@ -389,10 +388,10 @@ public:
             allowRun.store(true, std::memory_order_release);
             // 等待所有邻域计算和窃取结束，最后一个完成任务的worker会将allowRun改为false
             while (allowRun.load(std::memory_order_acquire))
-                _mm_pause();
+                cpu_pause();
             // 等待有效worker完成局部Gumbel-Max采样，只有实际执行过任务的worker才会进入usedWorker
             while (usedWorker.load(std::memory_order_acquire) != workerDone.load(std::memory_order_acquire))
-                _mm_pause();
+                cpu_pause();
             // 结果汇总、算子分数更新
             OperatorResultType *globalBestCandidate = nullptr;
             double globalMaxScore = -std::numeric_limits<double>::infinity();
