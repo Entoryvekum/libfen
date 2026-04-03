@@ -10,11 +10,11 @@ function setup_target(target_name)
 	
 	-- 平台特定的编译标志
 	if is_plat("windows") then
-		set_toolchains("msvc")
-		add_cxflags("/utf-8")
+		set_toolchains("llvm")
+		add_cxflags("-march=native")
 	elseif is_plat("macosx", "linux") then
-		set_toolchains("clang", "gcc")
-		add_cxflags("-fPIC", "-march=native")
+		set_toolchains("clang")
+		add_cxflags("-march=native")
 	end
 	add_defines(
 		"__ORDER_LITTLE_ENDIAN__=1234",
