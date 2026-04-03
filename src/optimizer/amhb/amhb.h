@@ -400,7 +400,7 @@ public:
     }
     template <typename nextTempType> void solve(AMHBParameters optParam, nextTempType nextTempObj) {
         param = optParam;
-        nextTemp = [&nextTempObj, this](double T, int iter, double energyCur) -> double { nextTempObj(T, iter, energyCur); };
+        nextTemp = [&nextTempObj, this](double T, int iter, double energyCur) -> double { return nextTempObj(T, iter, energyCur); };
         auto &encoding = workers[0]->encoding;
         if (print) {
             std::cout << "\n AMHB | Optimization Start. Initial Duplicates: " << encoding.dupCnt << std::endl;
